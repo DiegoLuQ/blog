@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from bson import ObjectId, json_util
-from typing import List
+from typing import List, Dict
 from datetime import date, datetime
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -57,7 +57,6 @@ class Content(BaseModel):
                 "keyword": ["crear", "post"],
             }
         }
-
 
 class Post(BaseModel):
     id: str = Field(default_factory=PyObjectId, alias="_id")
@@ -140,26 +139,6 @@ def retrive_contents():
         print(e)
 
 
-def retrive_posts_of_author(id: str):
-    try:
-        result = db_post.author.aggregate(
-            [
-                {
-                    "$lookup": {
-                        "from": "post",
-                        "localField": id,
-                        "foreignField": id,
-                        "as": "posts",
-                    }
-                },
-                {"$project": {"_id": 0}},
-            ]
-        )
-        return ujson.loads(ujson.dumps({"result": list(result)}))
-    except Exception as e:
-        print(e)
-
-
 def retrive_post_content(id: str):
     try:
         result = db_post.post.aggregate(
@@ -168,8 +147,8 @@ def retrive_post_content(id: str):
                 {
                     "$lookup": {
                         "from": "content",
-                        "localField": id,
-                        "foreignField": id,
+                        "localField": "_id",
+                        "foreignField": "id_post",
                         "as": "Contenido_Post",
                     }
                 },
@@ -180,18 +159,24 @@ def retrive_post_content(id: str):
         print(e)
 
 
-def retrieves_all_posts_with_their_contents():
+def retrieves_all_posts_with_their_author():
     try:
         result = db_post.post.aggregate(
             [
                 {
                     "$lookup": {
-                        "from": "content",
-                        "localField": "_id",
-                        "foreignField": "id_post",
-                        "as": "Contenido_Post",
+                        "from": "author",
+                        "localField": "id_author",
+                        "foreignField": "_id",
+                        "as": "author",
                     }
                 },
+                {"$addFields": {"author": {"$arrayElemAt": ["$author", 0]}}},
+                {"$project": {
+                    "author": {
+                        "_id":0
+                    }
+                }}
             ]
         )
         return list(result)
@@ -201,15 +186,16 @@ def retrieves_all_posts_with_their_contents():
 
 def retrive_auth_posts(id: str):
     try:
-        result = db_post.author.aggregate(
+        # funciona
+        result = db_post.post.aggregate(
             [
                 {"$match": {"_id": id}},
                 {
                     "$lookup": {
-                        "from": "post",
-                        "localField": "_id",
-                        "foreignField": "id_author",
-                        "as": "Posts",
+                        "from": "author",
+                        "localField": "id_author",
+                        "foreignField": "_id",
+                        "as": "autor",
                     }
                 },
                 {
@@ -217,7 +203,7 @@ def retrive_auth_posts(id: str):
                         "from": "content",
                         "localField": "_id",
                         "foreignField": "id_post",
-                        "as": "Content",
+                        "as": "contenido",
                     }
                 },
             ]
@@ -293,16 +279,7 @@ def get_contents():
         print(e)
 
 
-@app.get("/retrive/author_posts/")
-def get_post_author(id: str):
-    try:
-        result = retrive_posts_of_author(id)
-        return result
-    except Exception as e:
-        print(e)
-
-
-@app.get("/retrive/post_content")
+@app.get("/retrive/post_content", tags=["Need:var"])
 def post_content(id: str):
     try:
         data = retrive_post_content(id)
@@ -311,19 +288,19 @@ def post_content(id: str):
         print(e)
 
 
-@app.get("/retrive/posts_and_their_contents")
-def retrive_full_posts_and_contents():
+@app.get("/retrive/all_posts_and_their_author", tags=["Need:var"])
+def retrive_all_posts_and_authors():
     try:
-        data = retrieves_all_posts_with_their_contents()
+        data = retrieves_all_posts_with_their_author()
         return data
     except Exception as e:
         print(e)
 
 
-@app.get('/retrive/obtener_post_con_autho')
-def retrive_full(id:str):
+@app.get("/retrive/get_auth_post/{title}/{id_post}", tags=["Need:var"])
+def get_full_post(id_post: str, title=str):
     try:
-      retulst = retrive_auth_posts(id)
-      return retulst
+        retulst = retrive_auth_posts(id_post)
+        return retulst
     except Exception as e:
-      print(e)
+        print(e)
